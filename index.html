@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>局域网分组投票系统</title>
+    <style>
+        :root { --primary: #2563eb; --bg: #f8fafc; --card: #ffffff; --text: #1e293b; --border: #e2e8f0; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 800px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+        .title { font-size: 1.5rem; font-weight: bold; color: var(--primary); }
+        .card { background: var(--card); border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        button { cursor: pointer; border: none; border-radius: 6px; padding: 10px 16px; font-size: 14px; transition: 0.2s; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: #64748b; }
+        input { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; }
+        .hidden { display: none !important; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+        .group-btn { display: flex; flex-direction: column; align-items: center; padding: 15px 5px; background: #f1f5f9; border: 2px solid transparent; color: #475569; }
+        .group-btn.selected { background: #eff6ff; border-color: var(--primary); color: var(--primary); }
+        .group-btn:disabled { opacity: 0.5; cursor: not-allowed; background: #e2e8f0; }
+        .badge { font-size: 12px; padding: 2px 6px; border-radius: 10px; background: #cbd5e1; margin-top: 5px; }
+        .group-btn.selected .badge { background: #dbeafe; color: var(--primary); }
+        .option-btn { width: 100%; text-align: left; margin-bottom: 10px; background: white; border: 1px solid var(--border); display: flex; justify-content: space-between; }
+        .option-btn:hover { border-color: var(--primary); background: #f8fafc; }
+        .progress-container { margin-bottom: 15px; }
+        .progress-label { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 14px; }
+        .progress-bar-bg { height: 12px; background: #f1f5f9; border-radius: 6px; overflow: hidden; }
+        .progress-bar-fill { height: 100%; background: var(--primary); transition: width 0.5s ease; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <div class="title">📊 局域网投票</div>
+        <button id="teacherCreateBtn" class="btn-primary hidden" onclick="checkPwdAndShowCreate()">老师新建</button>
+    </div>
+
+    <div id="loading" style="text-align: center; color: #64748b;">正在连接服务器...</div>
+
+    <!-- 1. 创建投票界面 -->
+    <div id="createView" class="card hidden">
+        <h2 style="margin-top: 0;">新建投票</h2>
+        <label>问题：</label>
+        <input type="text" id="newQuestion" placeholder="例如：最佳方案是？">
+        <label>选项（用逗号分隔）：</label>
+        <input type="text" id="newOptions" placeholder="方案A, 方案B, 方案C" value="方案A, 方案B">
+        <div style="text-align: right; margin-top: 10px;">
+            <button class="btn-outline" onclick="hideCreateView()">取消</button>
+            <button class="btn-primary" onclick="submitPoll()">发布</button>
+        </div>
+    </div>
+
+    <!-- 2. 投票 + 结果界面 -->
+    <div id="pollView" class="hidden">
+        <!-- 投票区域 (手机端) -->
+        <div id="voteArea" class="card">
+            <h2 id="pollQuestion" style="margin-top:0;"></h2>
+            <p style="color:#64748b; font-size:14px;">我是哪个组？(每组限5票)</p>
+            <div id="groupGrid" class="grid-3"></div>
+            <div id="optionsArea" class="hidden">
+                <p style="color:#64748b; font-size:14px; margin-top: 20px;">请选择：</p>
+                <div id="optionsList"></div>
+            </div>
+            <div id="successMsg" class="hidden" style="text-align: center; padding: 20px;">
+                <div style="font-size: 40px;">✅</div>
+                <h3>投票成功</h3>
+                <button class="btn-primary" onclick="resetLocalVote()">下一位组员</button>
+            </div>
+        </div>
+
+        <!-- 结果区域 (大屏端 - 简易版，主要还是推荐用 screen.html) -->
+        <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:end; margin-bottom:15px;">
+                <h3 style="margin:0;">实时统计</h3>
+                <span style="font-size:14px; color:#64748b;">总票数: <b id="totalVotes" style="color:var(--text); font-size:18px;">0</b></span>
+            </div>
+            <div id="resultsList"></div>
+            <div style="margin-top: 20px; text-align: right;">
+                <button class="btn-danger" onclick="deletePoll()">⚠️ 结束本次投票</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="emptyState" class="card hidden" style="text-align: center; padding: 40px; color: #94a3b8;">
+        当前没有正在进行的投票
+    </div>
+</div>
+
+<script>
+    let ws;
+    let currentPoll = null;
+    let selectedGroup = null;
+    let hasVoted = false; 
+    let cachedPassword = null; // 临时存储密码
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
+
+    function connect() {
+        ws = new WebSocket(wsUrl);
+        ws.onopen = () => { document.getElementById('loading').classList.add('hidden'); console.log("Connected"); };
+        ws.onmessage = (event) => {
+            const msg = JSON.parse(event.data);
+            if (msg.type === "UPDATE_STATE") {
+                currentPoll = msg.data;
+                renderPoll();
+            } else if (msg.type === "POLL_DELETED") {
+                currentPoll = null; selectedGroup = null; hasVoted = false; 
+                renderPoll();
+            } else if (msg.type === "ERROR") {
+                alert("错误: " + msg.message); // 显示后端传来的密码错误信息
+                cachedPassword = null; // 密码错，清空缓存
+            }
+        };
+        ws.onclose = () => {
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('loading').innerText = "连接断开，正在重连...";
+            setTimeout(connect, 2000);
+        };
+    }
+
+    function renderPoll() {
+        const createView = document.getElementById('createView');
+        const pollView = document.getElementById('pollView');
+        const emptyState = document.getElementById('emptyState');
+        const teacherBtn = document.getElementById('teacherCreateBtn');
+
+        if (!currentPoll) {
+            pollView.classList.add('hidden');
+            emptyState.classList.remove('hidden');
+            createView.classList.add('hidden');
+            teacherBtn.classList.remove('hidden'); 
+            return;
+        }
+
+        emptyState.classList.add('hidden');
+        createView.classList.add('hidden');
+        teacherBtn.classList.add('hidden'); 
+        pollView.classList.remove('hidden');
+
+        document.getElementById('pollQuestion').innerText = currentPoll.question;
+        document.getElementById('totalVotes').innerText = currentPoll.totalVotes;
+        
+        // 渲染结果
+        const resultsList = document.getElementById('resultsList');
+        resultsList.innerHTML = '';
+        currentPoll.options.forEach(opt => {
+            const pct = currentPoll.totalVotes > 0 ? Math.round((opt.count / currentPoll.totalVotes) * 100) : 0;
+            resultsList.innerHTML += `
+                <div class="progress-container">
+                    <div class="progress-label"><span>${opt.text}</span><b>${opt.count} 票</b></div>
+                    <div class="progress-bar-bg"><div class="progress-bar-fill" style="width: ${pct}%"></div></div>
+                </div>`;
+        });
+        renderVoteInterface();
+    }
+
+    function renderVoteInterface() {
+        const voteArea = document.getElementById('voteArea');
+        const groupGrid = document.getElementById('groupGrid');
+        const optionsArea = document.getElementById('optionsArea');
+        const successMsg = document.getElementById('successMsg');
+        const optionsList = document.getElementById('optionsList');
+
+        if (hasVoted) {
+            groupGrid.classList.add('hidden'); optionsArea.classList.add('hidden'); successMsg.classList.remove('hidden');
+            return;
+        }
+
+        successMsg.classList.add('hidden'); groupGrid.classList.remove('hidden');
+        groupGrid.innerHTML = '';
+        
+        currentPoll.groups.forEach(g => {
+            const count = currentPoll.groupVotes[g] || 0;
+            const isFull = count >= 5;
+            const btn = document.createElement('button');
+            btn.className = `group-btn ${selectedGroup === g ? 'selected' : ''}`;
+            btn.disabled = isFull && selectedGroup !== g; 
+            btn.onclick = () => { if(!isFull) { selectedGroup = g; renderVoteInterface(); } };
+            btn.innerHTML = `<span>${g}</span><span class="badge">${isFull ? '已满' : count + '/5'}</span>`;
+            groupGrid.appendChild(btn);
+        });
+
+        if (selectedGroup) {
+            optionsArea.classList.remove('hidden');
+            optionsList.innerHTML = '';
+            currentPoll.options.forEach((opt, idx) => {
+                const btn = document.createElement('button');
+                btn.className = 'option-btn';
+                btn.innerHTML = `<span>${opt.text}</span> <span>👉</span>`;
+                btn.onclick = () => castVote(idx);
+                optionsList.appendChild(btn);
+            });
+        } else {
+            optionsArea.classList.add('hidden');
+        }
+    }
+
+    // --- 新逻辑：点击“老师新建”时就要输入密码 ---
+    function checkPwdAndShowCreate() {
+        const pwd = prompt("请输入管理员密码 (默认8888)：");
+        if (!pwd) return;
+        
+        // 简单存一下，后面发布时用
+        cachedPassword = pwd;
+        
+        // 显示创建界面
+        document.getElementById('emptyState').classList.add('hidden');
+        document.getElementById('createView').classList.remove('hidden');
+        document.getElementById('teacherCreateBtn').classList.add('hidden');
+    }
+
+    function hideCreateView() {
+        cachedPassword = null;
+        renderPoll(); 
+    }
+
+    function submitPoll() {
+        // 直接使用缓存的密码，或者如果没有缓存（异常情况），再弹一次
+        const pwd = cachedPassword || prompt("请输入管理员密码：");
+        if (!pwd) return;
+
+        const q = document.getElementById('newQuestion').value;
+        const optsStr = document.getElementById('newOptions').value;
+        if (!q.trim() || !optsStr.trim()) return alert("请填写完整");
+
+        const opts = optsStr.split(/,|，/).map(s => s.trim()).filter(s => s);
+        if (opts.length < 2) return alert("至少两个选项");
+
+        const groups = Array.from({length: 9}, (_, i) => `第 ${i+1} 组`);
+
+        console.log("Sending create_poll...");
+        ws.send(JSON.stringify({
+            action: "create_poll",
+            password: pwd, 
+            data: { question: q, options: opts, groups: groups }
+        }));
+    }
+
+    function castVote(idx) {
+        if (!selectedGroup) return alert("请先选分组");
+        ws.send(JSON.stringify({ action: "vote", optionIndex: idx, group: selectedGroup }));
+        hasVoted = true;
+        renderVoteInterface();
+    }
+
+    function resetLocalVote() {
+        hasVoted = false; selectedGroup = null; renderVoteInterface();
+    }
+
+    function deletePoll() {
+        const pwd = prompt("请输入管理员密码以结束投票：");
+        if (pwd) {
+            ws.send(JSON.stringify({ action: "delete_poll", password: pwd }));
+        }
+    }
+
+    connect();
+</script>
+
+</body>
+</html>
