@@ -149,7 +149,12 @@
         // 渲染结果
         const resultsList = document.getElementById('resultsList');
         resultsList.innerHTML = '';
-        currentPoll.options.forEach(opt => {
+
+        // 修改：对结果统计进行排序 (票数高 -> 低)
+        // 注意：这里使用 [...] 克隆数组，避免影响学生投票界面的选项顺序
+        const sortedOptions = [...currentPoll.options].sort((a, b) => b.count - a.count);
+
+        sortedOptions.forEach(opt => {
             const pct = currentPoll.totalVotes > 0 ? Math.round((opt.count / currentPoll.totalVotes) * 100) : 0;
             resultsList.innerHTML += `
                 <div class="progress-container">
