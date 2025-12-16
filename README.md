@@ -30,25 +30,36 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 2. 点击右上角的 “老师新建” 按钮。
 3. 立刻输入管理员密码 (默认: 8888)，密码验证通过后才会显示创建表单。
 4. 填写问题和选项，点击 “发布” 按钮（此时将自动发布，无需再次输入密码）。
-  <img width="1638" height="732" alt="屏幕截图 2025-12-16 000014" src="https://github.com/user-attachments/assets/f5343780-4fde-4985-967b-ec5feaacc280" />
+ <img width="2382" height="539" alt="屏幕截图 2025-12-15 235901" src="https://github.com/user-attachments/assets/e3e2f9ea-8d97-4e27-a416-93141be56d8a" />
+<img width="1669" height="431" alt="屏幕截图 2025-12-15 235931" src="https://github.com/user-attachments/assets/d0d35477-fa79-4464-b1f4-8f7a3f1cac76" />
+<img width="2682" height="1057" alt="屏幕截图 2025-12-15 234828" src="https://github.com/user-attachments/assets/49d852be-c0b8-4753-8973-61e0b91e3178" />
+
+  
+
  
 第三步：开启大屏展示 (大屏端)
 1. 将连接投影仪/大屏幕的显示器设置为扩展或复制模式。
 2. 在大屏浏览器访问：http://localhost:8000/screen
   - 或者使用 IP 访问：http://192.168.1.5:8000/screen
 3. 按 F11 全屏显示。此时屏幕上会显示刚才创建的投票结果（初始为0）。
+<img width="2063" height="975" alt="屏幕截图 2025-12-16 000058" src="https://github.com/user-attachments/assets/0f5726c7-28b4-4e7e-9dd7-fe04de2dee8b" />
+
 第四步：学生投票 (学生端)
 1. 学生手机/电脑连接与老师相同的 Wi-Fi。
 2. 学生在浏览器输入老师的 IP 地址：http://192.168.1.5:8000
   - 注意：学生不需要输入 /screen，直接访问根路径即可。
 3. 学生选择组别 -> 选择选项 -> 提交。
 4. 大屏幕实时滚动更新数据。
+<img width="1632" height="1443" alt="屏幕截图 2025-12-16 000122" src="https://github.com/user-attachments/assets/3da66e2f-7f55-4bec-a409-df632b52947d" />
+
 ⚠️ 5. 结束投票
 当投票结束，需要开启下一轮时：
 1. 老师可以在 大屏端页面 (/screen) 右下角点击 “结束投票”。
 2. 或者在 控制端页面 (/) 点击结束。
 3. 输入管理员密码 (默认: 8888)。
 4. 数据清空，系统回到等待状态，可以重新创建新投票。
+ <img width="1626" height="1475" alt="屏幕截图 2025-12-16 000140" src="https://github.com/user-attachments/assets/9b64c512-f780-4cc9-8c6e-1daffc9e4ff8" />
+
 ❓ 常见问题
 Q: 学生打不开网页？ A:
 1. 检查学生是否连接了和老师同一个 Wi-Fi。
