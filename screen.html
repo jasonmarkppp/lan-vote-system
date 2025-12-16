@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>大屏结果展示</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --bg: #1e293b; /* 深色背景，更适合大屏 */
+            --card: #ffffff;
+            --text: #1e293b;
+            --border: #e2e8f0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 40px;
+            display: flex;
+            justify-content: center;
+            align-items: center; /* 垂直居中 */
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+        .container {
+            width: 100%;
+            max-width: 1000px; /* 大屏更宽 */
+        }
+        
+        .card {
+            background: var(--card);
+            border-radius: 16px;
+            padding: 40px; /* 更大的内边距 */
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+
+        button {
+            cursor: pointer;
+            border: none;
+            border-radius: 6px;
+            padding: 10px 16px;
+            font-size: 14px;
+            transition: 0.2s;
+        }
+        .btn-danger { background: #ef4444; color: white; opacity: 0.2; transition: opacity 0.3s; }
+        .btn-danger:hover { opacity: 1; } /* 防止误触，平时半透明 */
+
+        .hidden { display: none !important; }
+
+        /* 进度条 */
+        .progress-container { margin-bottom: 25px; }
+        .progress-label { 
+            display: flex; 
+            justify-content: space-between; 
+            margin-bottom: 8px; 
+            font-size: 20px; /* 更大的字号 */
+            font-weight: bold;
+        }
+        .progress-bar-bg { 
+            height: 24px; /* 更粗的进度条 */
+            background: #f1f5f9; 
+            border-radius: 12px; 
+            overflow: hidden; 
+        }
+        .progress-bar-fill { 
+            height: 100%; 
+            background: var(--primary); 
+            transition: width 0.5s ease; 
+            background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%);
+        }
+
+        .title-area {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #f1f5f9;
+        }
+        .main-question { font-size: 32px; font-weight: 800; color: #0f172a; margin: 0; }
+        .vote-counter { font-size: 24px; color: #64748b; }
+        .vote-number { font-size: 36px; color: var(--primary); font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    
+    <div id="loading" style="text-align: center; color: #94a3b8; font-size: 24px;">
+        📡 正在连接投票服务器...
+    </div>
+
+    <!-- 结果区域 -->
+    <div id="pollView" class="card hidden">
+        <div class="title-area">
+            <h1 id="pollQuestion" class="main-question"></h1>
+            <div class="vote-counter">
+                已投票: <span id="totalVotes" class="vote-number">0</span>
+            </div>
+        </div>
+        
+        <div id="resultsList"></div>
+        
+        <div style="margin-top: 40px; text-align: right;">
+            <button class="btn-danger" onclick="deletePoll()">⚠️ 结束投票 (密码)</button>
+        </div>
+    </div>
+
+    <div id="emptyState" class="hidden" style="text-align: center; color: #cbd5e1;">
+        <div style="font-size: 80px; margin-bottom: 20px;">☕</div>
+        <h2 style="font-size: 32px;">等待老师发布投票...</h2>
+        <p>此页面将自动刷新显示最新结果</p>
+    </div>
+</div>
+
+<script>
+    let ws;
+    let currentPoll = null;
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
+
+    function connect() {
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+            document.getElementById('loading').classList.add('hidden');
+            console.log("Connected to screen");
+        };
+
+        ws.onmessage = (event) => {
+            const msg = JSON.parse(event.data);
+            if (msg.type === "UPDATE_STATE") {
+                currentPoll = msg.data;
+                renderScreen();
+            } else if (msg.type === "POLL_DELETED") {
+                currentPoll = null;
+                renderScreen();
+            } else if (msg.type === "ERROR") {
+                alert(msg.message);
+            }
+        };
+
+        ws.onclose = () => {
+            document.getElementById('loading').classList.remove('hidden');
+            setTimeout(connect, 2000);
+        };
+    }
+
+    function renderScreen() {
+        const pollView = document.getElementById('pollView');
+        const emptyState = document.getElementById('emptyState');
+
+        if (!currentPoll) {
+            pollView.classList.add('hidden');
+            emptyState.classList.remove('hidden');
+            return;
+        }
+
+        emptyState.classList.add('hidden');
+        pollView.classList.remove('hidden');
+
+        document.getElementById('pollQuestion').innerText = currentPoll.question;
+        document.getElementById('totalVotes').innerText = currentPoll.totalVotes;
+
+        const resultsList = document.getElementById('resultsList');
+        resultsList.innerHTML = '';
+        
+        // 修改：增加排序逻辑 (票数高 -> 低)
+        const sortedOptions = [...currentPoll.options].sort((a, b) => b.count - a.count);
+        
+        sortedOptions.forEach(opt => {
+            const pct = currentPoll.totalVotes > 0 ? Math.round((opt.count / currentPoll.totalVotes) * 100) : 0;
+            const div = document.createElement('div');
+            div.className = 'progress-container';
+            div.innerHTML = `
+                <div class="progress-label">
+                    <span>${opt.text}</span>
+                    <span style="color: #2563eb;">${opt.count} 票</span>
+                </div>
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" style="width: ${pct}%"></div>
+                </div>
+            `;
+            resultsList.appendChild(div);
+        });
+    }
+
+    function deletePoll() {
+        const pwd = prompt("请输入管理员密码以结束投票 (默认8888)：");
+        if (pwd) {
+            ws.send(JSON.stringify({ action: "delete_poll", password: pwd }));
+        }
+    }
+
+    connect();
+</script>
+
+</body>
+</html>
